@@ -13,6 +13,7 @@ import { useLanguage } from '../services/i18n';
 import { useAlert } from '../components/CustomModal';
 import { useAuthModal } from '../components/LoginModal';
 import Footer from '../components/Footer';
+import DndCompanionPromo from '../components/DndCompanionPromo';
 
 interface HomeProps {
     currentUser: User;
@@ -361,6 +362,9 @@ const Home: React.FC<HomeProps> = ({ currentUser, onLogout }) => {
                             )}
                         </div>
                     </div>
+
+                    {/* 🎲 ANUNCIO RECOMENDADO: D&D COMPANION */}
+                    <DndCompanionPromo targetUrl="https://dnd-companion-chi.vercel.app/" />
 
                     {/* Tarjeta Destacada: Galería Gamer */}
                     <div 

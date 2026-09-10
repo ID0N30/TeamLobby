@@ -632,10 +632,12 @@ export const Footer: React.FC = () => {
 
             <div className="p-4 border-t border-gray-800 bg-black/40 flex items-center justify-between">
               <a
-                href="mailto:jaomp3@gmail.com?subject=Inter%C3%A9s%20en%20DnD%20Companion"
-                className="text-primary font-bold text-xs hover:underline flex items-center gap-1"
+                href="https://dnd-companion-chi.vercel.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-400 font-bold text-xs hover:underline flex items-center gap-1"
               >
-                <span>{isEs ? 'Consultar acceso a la beta' : 'Request beta access'}</span>
+                <span>{isEs ? 'Abrir D&D Companion' : 'Open D&D Companion'}</span>
                 <ExternalLink size={12} />
               </a>
               <button
