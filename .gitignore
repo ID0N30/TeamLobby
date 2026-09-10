@@ -1,0 +1,57 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependency directories
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Project Instructions
+INSTRUCCIONES_FIREBASE.md
+INSTRUCCIONES_DESPLIEGUE.md
+INSTRUCCIONES_PWA.md
+
+# Firebase service account keys (CRITICAL - never commit)
+**/serviceAccountKey.json
+**/serviceAccountKey*.json
+
+# Cleanup scripts with embedded credentials
+cleanup-guests.*
+functions/cleanup-guests.*
+
+# Firebase configuration with project IDs
+.firebaserc
+database.rules.*
+
+# Build output
+build/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env.*.local
+!.env.example
+
+# Local key instructions
+INSTRUCCIONES_LOCAL_KEYS.md
