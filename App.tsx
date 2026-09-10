@@ -12,6 +12,7 @@ import Lobby from './pages/Lobby';
 import Admin from './pages/Admin';
 import Profile from './pages/Profile';
 import Showcase from './pages/Showcase';
+import Legal from './pages/Legal';
 
 const createGuestUser = (): User => {
   let guestId = sessionStorage.getItem("guestId");
@@ -97,6 +98,10 @@ const AppContent: React.FC = () => {
           <Route path="/showcase" element={<Showcase currentUser={currentUser} />} />
           <Route path="/showcase/:userId" element={<Showcase currentUser={currentUser} />} />
           <Route path="/admin" element={currentUser.isAdmin ? <Admin currentUser={currentUser} /> : <Navigate to="/" />} />
+          <Route path="/terms" element={<Legal defaultTab="terms" />} />
+          <Route path="/privacy" element={<Legal defaultTab="privacy" />} />
+          <Route path="/cookies" element={<Legal defaultTab="cookies" />} />
+          <Route path="/legal" element={<Legal />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Route>
       </Routes>

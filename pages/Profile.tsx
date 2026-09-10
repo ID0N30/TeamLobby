@@ -23,6 +23,7 @@ import { soundService } from '../services/soundService';
 import { useLanguage } from '../services/i18n';
 import { useAlert } from '../components/CustomModal';
 import { useAuthModal } from '../components/LoginModal';
+import Footer from '../components/Footer';
 
 interface ProfileProps {
   currentUser: User;
@@ -617,6 +618,7 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) => {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 };

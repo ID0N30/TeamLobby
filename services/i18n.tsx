@@ -292,7 +292,30 @@ const translations = {
     'challenges.status.completed': 'Completed 🏆',
     'challenges.status.declined': 'Declined',
     'challenges.created': 'Challenge sent to your friend!',
-    'challenges.completedToast': 'Challenge completed! Great job!'
+    'challenges.completedToast': 'Challenge completed! Great job!',
+
+    // footer
+    'footer.brandName': 'Idoneus Software',
+    'footer.tagline': 'Digital solutions for squad coordination and gaming ecosystems.',
+    'footer.colombia': 'Engineered in Colombia 🇨🇴',
+    'footer.allOperational': 'All systems operational',
+    'footer.productTitle': 'Product & Ecosystem',
+    'footer.features': 'Features',
+    'footer.changelog': 'Updates & Changelog',
+    'footer.dndCompanion': 'DnD Companion',
+    'footer.freemiumPlans': 'Plans & Freemium',
+    'footer.supportTitle': 'Help & Support',
+    'footer.helpCenter': 'Help Center / FAQ',
+    'footer.reportIssue': 'Report an Issue',
+    'footer.contact': 'Direct Contact',
+    'footer.legalTitle': 'Legal & Compliance',
+    'footer.terms': 'Terms of Service',
+    'footer.privacy': 'Privacy Policy',
+    'footer.cookies': 'Cookie Policy',
+    'footer.copyright': '© 2026 Idoneus Software. All rights reserved.',
+    'footer.community': 'Community',
+    'footer.communitySub': 'Join our gaming and roleplay hub.',
+    'footer.legalNotice': 'TeamLobby and DnD Companion are operated under the legal responsibility of Julian Andrés Osorio Marín (Colombia).'
   },
   es: {
     // common
@@ -582,7 +605,30 @@ const translations = {
     'challenges.status.completed': '¡Completado! 🏆',
     'challenges.status.declined': 'Rechazado',
     'challenges.created': '¡Reto enviado a tu amigo!',
-    'challenges.completedToast': '¡Reto completado! ¡Gran hazaña!'
+    'challenges.completedToast': '¡Reto completado! ¡Gran hazaña!',
+
+    // footer
+    'footer.brandName': 'Idoneus Software',
+    'footer.tagline': 'Soluciones digitales para la gestión de equipos y sistemas de juego.',
+    'footer.colombia': 'Diseñado y desarrollado en Colombia 🇨🇴',
+    'footer.allOperational': 'Sistemas 100% operativos',
+    'footer.productTitle': 'Producto y Ecosistema',
+    'footer.features': 'Características',
+    'footer.changelog': 'Actualizaciones (Changelog)',
+    'footer.dndCompanion': 'DnD Companion',
+    'footer.freemiumPlans': 'Planes y Freemium',
+    'footer.supportTitle': 'Asistencia y Soporte',
+    'footer.helpCenter': 'Centro de Ayuda / FAQ',
+    'footer.reportIssue': 'Reportar un Problema',
+    'footer.contact': 'Contacto Directo',
+    'footer.legalTitle': 'Legal y Privacidad',
+    'footer.terms': 'Términos de Servicio',
+    'footer.privacy': 'Política de Privacidad',
+    'footer.cookies': 'Política de Cookies',
+    'footer.copyright': '© 2026 Idoneus Software. Todos los derechos reservados.',
+    'footer.community': 'Comunidad',
+    'footer.communitySub': 'Únete a nuestro centro de videojuegos y rol.',
+    'footer.legalNotice': 'TeamLobby y DnD Companion operan bajo la responsabilidad legal de Julian Andrés Osorio Marín (Colombia).'
   }
 };
 

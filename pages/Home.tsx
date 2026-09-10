@@ -12,6 +12,7 @@ import { soundService } from '../services/soundService';
 import { useLanguage } from '../services/i18n';
 import { useAlert } from '../components/CustomModal';
 import { useAuthModal } from '../components/LoginModal';
+import Footer from '../components/Footer';
 
 interface HomeProps {
     currentUser: User;
@@ -227,7 +228,7 @@ const Home: React.FC<HomeProps> = ({ currentUser, onLogout }) => {
                 </div>
             </header>
 
-            <div className="max-w-6xl mx-auto w-full z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 pb-20">
+            <div id="features" className="max-w-6xl mx-auto w-full z-10 grid grid-cols-1 lg:grid-cols-12 gap-10 pb-10">
                 <div className="lg:col-span-8 space-y-10">
                     <div 
                         onClick={() => handleJoinRoom(communityHubCode, undefined, true)}
@@ -423,6 +424,9 @@ const Home: React.FC<HomeProps> = ({ currentUser, onLogout }) => {
                     </section>
                 </div>
             </div>
+
+            {/* Global Footer */}
+            <Footer />
 
             {showCreateModal && (
                 <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
