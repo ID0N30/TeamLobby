@@ -235,12 +235,23 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
 
     const handleVote = (id: string) => {
         if (!room) return;
+        if (currentUser.isGuest) {
+            soundService.playPop();
+            showAlert({
+                title: t('lobby.guestVoteRestrictedTitle'),
+                message: t('lobby.guestVoteRestricted'),
+                type: 'info',
+                confirmText: t('auth.login'),
+                onConfirm: () => openLoginModal('auth.login')
+            });
+            return;
+        }
         const game = room.gameQueue.find(g => g.id === id);
         const currentlyVoted = game?.votedBy 
             ? (Array.isArray(game.votedBy) ? game.votedBy.includes(currentUser.id) : !!game.votedBy[currentUser.id]) 
             : false;
         soundService.playVote(!currentlyVoted);
-        voteForGame(room.code, id, currentUser.id);
+        voteForGame(room.code, id, currentUser.id, currentUser.isGuest);
     };
 
     const handleReady = () => {
@@ -253,8 +264,12 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
 
     const handleSendMsg = (txt: string) => {
         if (!room) return;
+        if (currentUser.isGuest) {
+            openLoginModal('auth.login');
+            return;
+        }
         soundService.playMessageSent();
-        sendChatMessage(room.code, { id: `${Date.now()}`, userId: currentUser.id, userName: currentUser.nickname || currentUser.alias, content: txt, timestamp: Date.now() });
+        sendChatMessage(room.code, { id: `${Date.now()}`, userId: currentUser.id, userName: currentUser.nickname || currentUser.alias, content: txt, timestamp: Date.now() }, currentUser.isGuest);
     };
 
     const handleStartActivity = (type: 'roulette' | 'voting') => {
@@ -302,6 +317,11 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
 
     const handleSaveGame = async () => {
         if (!newGameTitle || !room) return;
+        if (currentUser.isGuest) {
+            showAlert({ message: t('lobby.guestAddGameRestricted'), type: 'info' });
+            openLoginModal('auth.proposeReason');
+            return;
+        }
         setIsUploading(true);
         try {
             const gameData: Partial<Game> = { 
@@ -312,7 +332,7 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
                 platforms: newGamePlatforms,
                 link: newGameLink 
             };
-            if (editingGameId) await updateGameInRoom(room.code, editingGameId, gameData);
+            if (editingGameId) await updateGameInRoom(room.code, editingGameId, gameData, currentUser.id);
             else {
                 const newGame: Game = { ...gameData as Game, id: `custom-${Date.now()}`, votedBy: [currentUser.id], tags: ['Custom'], status: 'approved', proposedBy: currentUser.id, comments: {} };
                 await addGameToRoom(room.code, newGame, currentUser);
@@ -323,15 +343,19 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
 
     const handleAddComment = async () => {
         if (!newComment.trim() || !selectedGame || !room) return;
+        if (currentUser.isGuest) {
+            openLoginModal('auth.commentReason');
+            return;
+        }
         const comment: Comment = { id: `comment-${Date.now()}`, userId: currentUser.id, userName: currentUser.nickname || currentUser.alias, text: newComment, timestamp: Date.now() };
-        await addCommentToGame(room.code, selectedGame.id, comment);
+        await addCommentToGame(room.code, selectedGame.id, comment, currentUser.isGuest);
         setNewComment('');
         const updatedComments = { ...(selectedGame.comments || {}), [comment.id]: comment };
         setSelectedGame({ ...selectedGame, comments: updatedComments });
     };
 
     const handleDeleteGame = async (gameId: string) => {
-        if (!room) return;
+        if (!room || currentUser.isGuest) return;
         showAlert({
             title: t('lobby.removeGameTitle'),
             message: t('lobby.removeGameConfirm'),
@@ -671,7 +695,7 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
                             {/* GRID DE JUEGOS SIN PODIO REPETITIVO */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8 animate-in fade-in duration-500">
                                 {filteredGames.map(g => (
-                                    <GameCard key={g.id} game={g} currentUserId={currentUser.id} onVote={handleVote} onOpenDetails={setSelectedGame} isVotingEnabled={true} />
+                                    <GameCard key={g.id} game={g} currentUserId={currentUser.id} isGuest={currentUser.isGuest} onVote={handleVote} onOpenDetails={setSelectedGame} isVotingEnabled={true} />
                                 ))}
                                 {room.gameQueue.length === 0 && (
                                     <div className="col-span-full py-24 flex flex-col items-center justify-center text-gray-700 bg-surface/10 border-2 border-dashed border-gray-800 rounded-[3rem]">
@@ -883,13 +907,32 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
 
                         <div className="p-6 md:p-8 bg-gray-900 border-t border-gray-800 flex flex-wrap items-center gap-4 shrink-0">
                             {view === 'LOBBY' && (
-                                <button onClick={() => handleVote(selectedGame.id)} className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black text-xs tracking-[0.2em] uppercase flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${hasUserVotedGame(selectedGame.votedBy, currentUser.id) ? 'bg-primary text-white shadow-primary/30' : 'bg-white text-black hover:bg-gray-200 shadow-xl'}`}>
-                                    <ThumbsUp size={18} className={hasUserVotedGame(selectedGame.votedBy, currentUser.id) ? 'fill-current' : ''}/>
-                                    {hasUserVotedGame(selectedGame.votedBy, currentUser.id) ? t('lobby.voted') : t('lobby.vote')}
+                                <button 
+                                    onClick={() => handleVote(selectedGame.id)} 
+                                    className={`flex-1 min-w-[120px] py-4 rounded-2xl font-black text-xs tracking-[0.2em] uppercase flex items-center justify-center gap-3 transition-all active:scale-95 shadow-2xl ${
+                                        currentUser.isGuest
+                                            ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                                            : hasUserVotedGame(selectedGame.votedBy, currentUser.id)
+                                                ? 'bg-primary text-white shadow-primary/30'
+                                                : 'bg-white text-black hover:bg-gray-200 shadow-xl'
+                                    }`}
+                                    title={currentUser.isGuest ? t('lobby.guestVoteRestricted') : undefined}
+                                >
+                                    {currentUser.isGuest ? (
+                                        <>
+                                            <Lock size={18} />
+                                            {t('lobby.loginToVote')}
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ThumbsUp size={18} className={hasUserVotedGame(selectedGame.votedBy, currentUser.id) ? 'fill-current' : ''}/>
+                                            {hasUserVotedGame(selectedGame.votedBy, currentUser.id) ? t('lobby.voted') : t('lobby.vote')}
+                                        </>
+                                    )}
                                 </button>
                             )}
 
-                            {(currentUser.isAdmin || selectedGame.proposedBy === currentUser.id) && view === 'LOBBY' && (
+                            {!currentUser.isGuest && (currentUser.isAdmin || selectedGame.proposedBy === currentUser.id) && view === 'LOBBY' && (
                                 <div className="flex gap-2">
                                     <button onClick={() => openEditModal(selectedGame)} className="p-4 bg-surface border border-gray-800 text-gray-400 hover:text-white rounded-2xl transition-all hover:bg-gray-800 shadow-xl" title={t('common.edit')}>
                                         <Edit3 size={18}/>

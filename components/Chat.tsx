@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, User } from '../types';
-import { Send, Bot, Info } from 'lucide-react';
+import { Send, Bot, Info, Lock } from 'lucide-react';
 import { useLanguage } from '../services/i18n';
+import { useAuthModal } from './LoginModal';
 
 interface ChatProps {
   messages: Message[];
@@ -15,6 +16,7 @@ const Chat: React.FC<ChatProps> = ({ messages, currentUser, onSendMessage }) => 
   const [inputText, setInputText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
+  const { openLoginModal } = useAuthModal();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -22,6 +24,10 @@ const Chat: React.FC<ChatProps> = ({ messages, currentUser, onSendMessage }) => 
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentUser.isGuest) {
+      openLoginModal('auth.login');
+      return;
+    }
     if (!inputText.trim()) return;
 
     onSendMessage(inputText);
@@ -81,24 +87,44 @@ const Chat: React.FC<ChatProps> = ({ messages, currentUser, onSendMessage }) => 
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSend} className="p-6 bg-gray-900/95 border-t border-gray-800 backdrop-blur-2xl">
-        <div className="relative group">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder={t('chat.placeholder')}
-            className="w-full bg-black/60 border border-gray-800 text-white rounded-2xl py-4 pl-5 pr-14 text-xs font-bold focus:outline-none focus:border-primary transition-all shadow-inner placeholder:text-gray-700"
-          />
+      {currentUser.isGuest ? (
+        <div className="p-4 bg-gray-900/95 border-t border-gray-800 backdrop-blur-2xl flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-xl bg-black/40 border border-gray-800 text-primary shrink-0">
+              <Lock size={14} />
+            </div>
+            <p className="text-[11px] font-bold text-gray-400 truncate">
+              {t('lobby.guestChatNotice')}
+            </p>
+          </div>
           <button 
-            type="submit"
-            disabled={!inputText.trim()}
-            className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl transition-all shadow-lg active:scale-90 ${inputText.trim() ? 'bg-primary text-white hover:bg-violet-600 shadow-primary/20' : 'text-gray-800 cursor-not-allowed'}`}
+            type="button"
+            onClick={() => openLoginModal('auth.login')}
+            className="px-3.5 py-2 bg-primary hover:bg-violet-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all shadow-md active:scale-95 shrink-0"
           >
-            <Send size={16} />
+            {t('auth.login')}
           </button>
         </div>
-      </form>
+      ) : (
+        <form onSubmit={handleSend} className="p-6 bg-gray-900/95 border-t border-gray-800 backdrop-blur-2xl">
+          <div className="relative group">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder={t('chat.placeholder')}
+              className="w-full bg-black/60 border border-gray-800 text-white rounded-2xl py-4 pl-5 pr-14 text-xs font-bold focus:outline-none focus:border-primary transition-all shadow-inner placeholder:text-gray-700"
+            />
+            <button 
+              type="submit"
+              disabled={!inputText.trim()}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-xl transition-all shadow-lg active:scale-90 ${inputText.trim() ? 'bg-primary text-white hover:bg-violet-600 shadow-primary/20' : 'text-gray-800 cursor-not-allowed'}`}
+            >
+              <Send size={16} />
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 };

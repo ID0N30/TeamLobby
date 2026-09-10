@@ -10,6 +10,7 @@ import { useLanguage, TranslationKey } from '../services/i18n';
 interface GameCardProps {
   game: Game;
   currentUserId: string;
+  isGuest?: boolean;
   onVote: (id: string) => void;
   onOpenDetails: (game: Game) => void;
   isVotingEnabled: boolean;
@@ -23,14 +24,14 @@ const PlatformIcon = ({ p }: { p: string }) => {
   return null;
 };
 
-const GameCard: React.FC<GameCardProps> = ({ game, currentUserId, onVote, onOpenDetails, isVotingEnabled }) => {
+const GameCard: React.FC<GameCardProps> = ({ game, currentUserId, isGuest = false, onVote, onOpenDetails, isVotingEnabled }) => {
   const { t } = useLanguage();
   const [imgError, setImgError] = useState(false);
   
   const votes = game.votedBy 
     ? (Array.isArray(game.votedBy) ? game.votedBy.length : Object.keys(game.votedBy).filter(k => (game.votedBy as any)[k]).length)
     : 0;
-  const hasVoted = game.votedBy 
+  const hasVoted = !isGuest && game.votedBy 
     ? (Array.isArray(game.votedBy) ? game.votedBy.includes(currentUserId) : !!(game.votedBy as any)[currentUserId])
     : false;
 
@@ -82,6 +83,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, currentUserId, onVote, onOpen
                 e.stopPropagation();
                 onVote(game.id);
               }}
+              title={isGuest ? t('lobby.guestVoteRestricted') : undefined}
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all active:scale-90 ${
                 hasVoted 
                   ? 'bg-primary text-white shadow-lg shadow-primary/20' 

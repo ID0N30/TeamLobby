@@ -291,14 +291,20 @@ export const resetReadyActivity = async (code: string) => {
 
 // --- GESTIÓN DE JUEGOS ---
 export const addGameToRoom = async (code: string, game: Game, user: User) => {
-    if (!db) return;
+    if (!db || user.isGuest || user.id.startsWith('guest_')) {
+        console.warn('[Room] Acción denegada: los usuarios invitados no pueden proponer juegos.');
+        return;
+    }
     const gameId = game.id || `game-${Date.now()}`;
     const gameWithMeta: Game = { ...game, id: gameId, proposedBy: user.id, status: 'approved', votedBy: { [user.id]: true } };
     await db.ref(`${ROOMS_REF}/${code}/gameQueue/${gameId}`).set(cleanForFirebase(gameWithMeta));
 };
 
-export const voteForGame = async (code: string, gameId: string, userId: string) => {
-    if (!db) return;
+export const voteForGame = async (code: string, gameId: string, userId: string, isGuest: boolean = false) => {
+    if (!db || isGuest || !userId || userId.startsWith('guest_')) {
+        console.warn('[Room] Acción denegada: los usuarios invitados no pueden votar propuestas.');
+        return;
+    }
     const votesRef = db.ref(`${ROOMS_REF}/${code}/gameQueue/${gameId}/votedBy`);
     const snap = await votesRef.once('value');
     const existing = snap.val() || {};
@@ -312,8 +318,11 @@ export const voteForGame = async (code: string, gameId: string, userId: string) 
     await votesRef.set(votes);
 };
 
-export const sendChatMessage = async (code: string, message: Message) => {
-    if (!db) return;
+export const sendChatMessage = async (code: string, message: Message, isGuest: boolean = false) => {
+    if (!db || isGuest || message.userId.startsWith('guest_')) {
+        console.warn('[Room] Acción denegada: los invitados no pueden enviar mensajes al chat.');
+        return;
+    }
     await db.ref(`${ROOMS_REF}/${code}/chatHistory/${message.id}`).set(cleanForFirebase(message));
 };
 
@@ -385,9 +394,9 @@ export const leaveRoomCleanly = async (code: string, user: User | string) => {
 export const deleteRoom = async (code: string) => { if (db) await db.ref(`${ROOMS_REF}/${code}`).remove(); };
 export const updateUserProfile = async (userId: string, data: Partial<User>) => { if (db) await db.ref(`${USERS_REF}/${userId}`).update(cleanForFirebase(data)); };
 export const subscribeToUserProfile = (userId: string, callback: (user: Partial<User>) => void) => { if (!db) return () => {}; const ref = db.ref(`${USERS_REF}/${userId}`); const listener = ref.on('value', snap => { if (snap.exists()) callback(snap.val()); }); return () => ref.off('value', listener); };
-export const updateGameInRoom = async (code: string, gameId: string, data: Partial<Game>) => { if (db) await db.ref(`${ROOMS_REF}/${code}/gameQueue/${gameId}`).update(cleanForFirebase(data)); };
-export const addCommentToGame = async (roomCode: string, gameId: string, comment: Comment) => { if (db) await db.ref(`${ROOMS_REF}/${roomCode}/gameQueue/${gameId}/comments/${comment.id}`).set(cleanForFirebase(comment)); };
-export const removeGameFromRoom = async (code: string, gameId: string, userId: string, isAdmin: boolean) => { if (!db) return; const ref = db.ref(`${ROOMS_REF}/${code}/gameQueue/${gameId}`); const snap = await ref.once('value'); if (snap.exists() && (isAdmin || snap.val().proposedBy === userId)) await ref.remove(); };
+export const updateGameInRoom = async (code: string, gameId: string, data: Partial<Game>, userId?: string) => { if (!db || (userId && userId.startsWith('guest_'))) return; await db.ref(`${ROOMS_REF}/${code}/gameQueue/${gameId}`).update(cleanForFirebase(data)); };
+export const addCommentToGame = async (roomCode: string, gameId: string, comment: Comment, isGuest: boolean = false) => { if (!db || isGuest || comment.userId.startsWith('guest_')) return; await db.ref(`${ROOMS_REF}/${roomCode}/gameQueue/${gameId}/comments/${comment.id}`).set(cleanForFirebase(comment)); };
+export const removeGameFromRoom = async (code: string, gameId: string, userId: string, isAdmin: boolean) => { if (!db || userId.startsWith('guest_')) return; const ref = db.ref(`${ROOMS_REF}/${code}/gameQueue/${gameId}`); const snap = await ref.once('value'); if (snap.exists() && (isAdmin || snap.val().proposedBy === userId)) await ref.remove(); };
 export const getAllRooms = async (): Promise<Room[]> => { if (!db) return []; const snap = await db.ref(ROOMS_REF).once('value'); if (!snap.exists()) return []; return Object.values(snap.val()).map((r: any) => ({ ...r, members: Object.values(r.members || {}), gameQueue: Object.values(r.gameQueue || {}), chatHistory: Object.values(r.chatHistory || {}) })); };
 export const toggleBanUser = async (userId: string, isBanned: boolean) => {
     if (!db) return;
