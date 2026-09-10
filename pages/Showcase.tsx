@@ -119,8 +119,8 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
             setTargetUser({
               id: targetUserId,
               alias: u.alias || u.nickname || 'Gamer',
-              nickname: u.nickname,
-              avatarUrl: u.avatarUrl,
+              nickname: u.nickname || '',
+              avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUserId}`,
               playerCode: u.playerCode || generateCodeFromUid(targetUserId)
             });
           } else {
@@ -130,15 +130,16 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
               setTargetUser({
                 id: targetUserId,
                 alias: u.alias || u.nickname || 'Gamer',
-                nickname: u.nickname,
-                avatarUrl: u.avatarUrl,
+                nickname: u.nickname || '',
+                avatarUrl: u.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUserId}`,
                 playerCode: u.playerCode || generateCodeFromUid(targetUserId)
               });
             } else {
               setTargetUser({
                 id: targetUserId,
                 alias: 'Gamer',
-                avatarUrl: '',
+                nickname: '',
+                avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUserId}`,
                 playerCode: generateCodeFromUid(targetUserId)
               });
             }
@@ -148,7 +149,8 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
           setTargetUser({
             id: targetUserId,
             alias: 'Gamer',
-            avatarUrl: '',
+            nickname: '',
+            avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUserId}`,
             playerCode: generateCodeFromUid(targetUserId)
           });
         }
@@ -202,6 +204,8 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
       return;
     }
     if (!db) return;
+
+    let offUsersListener: (() => void) | null = null;
     const ref = db.ref(`friends/${currentUser.id}/${targetUserId}`);
     const listener = ref.on('value', (snap) => {
       if (snap.exists() && snap.val()?.status) {
@@ -212,11 +216,30 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
           setHasAccess(true);
         }
       } else {
-        setFriendshipStatus('none');
+        // Fallback a users/${currentUser.id}/friends/${targetUserId}
+        const uRef = db?.ref(`users/${currentUser.id}/friends/${targetUserId}`);
+        if (uRef) {
+          uRef.once('value', (uSnap) => {
+            if (uSnap.exists() && uSnap.val()?.status) {
+              const st = uSnap.val().status;
+              setFriendshipStatus(st);
+              if (st === 'accepted') {
+                setIsFriend(true);
+                setHasAccess(true);
+              }
+            } else {
+              setFriendshipStatus('none');
+            }
+          });
+        } else {
+          setFriendshipStatus('none');
+        }
       }
     });
+
     return () => {
       ref.off('value', listener);
+      if (offUsersListener) offUsersListener();
     };
   }, [currentUser?.id, currentUser?.isGuest, targetUserId, isOwner]);
 
@@ -487,10 +510,16 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
     try {
       soundService.playPop();
       await sendFriendRequest(currentUser, targetUser);
+      setFriendshipStatus('pending_sent');
       showAlert({ message: t('friends.requestSent'), type: 'success' });
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error sending friend request:', e);
-      showAlert({ message: t('common.error'), type: 'error' });
+      showAlert({ 
+        message: e?.message?.includes('permission') 
+          ? 'Error de permisos al conectar con la base de datos de amigos.'
+          : t('common.error'), 
+        type: 'error' 
+      });
     } finally {
       setIsSendingRequest(false);
     }
@@ -501,6 +530,9 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
     try {
       soundService.playChime();
       await acceptFriendRequest(currentUser.id, targetUserId);
+      setFriendshipStatus('accepted');
+      setIsFriend(true);
+      setHasAccess(true);
       showAlert({ message: t('friends.requestAccepted'), type: 'success' });
     } catch (e) {
       console.error('Error accepting friend request:', e);

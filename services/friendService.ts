@@ -117,64 +117,129 @@ export const searchUserByPlayerCode = async (rawCode: string): Promise<UserSumma
 };
 
 /**
+ * Helper para asegurar que ningún campo enviado a Firebase sea undefined
+ */
+const sanitizeFriendData = (record: Record<string, any>): Record<string, any> => {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(record)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
+};
+
+/**
  * Envía una solicitud de amistad a otro jugador.
+ * Es tolerante a fallos de reglas en la nube y previene cualquier campo undefined.
  */
 export const sendFriendRequest = async (currentUser: User, targetUser: UserSummary | User): Promise<void> => {
-  if (!db || currentUser.isGuest || currentUser.id === targetUser.id) return;
+  if (!db || currentUser.isGuest || !currentUser.id || !targetUser?.id || currentUser.id === targetUser.id) return;
 
   const timestamp = Date.now();
-  const currentCode = currentUser.playerCode || '';
-  const targetCode = targetUser.playerCode || '';
+  const currentCode = currentUser.playerCode || generateCodeFromUid(currentUser.id);
+  const targetCode = targetUser.playerCode || generateCodeFromUid(targetUser.id);
 
-  const updates: Record<string, any> = {};
-  
-  // Para el remitente (solicitud enviada pendiente)
-  updates[`friends/${currentUser.id}/${targetUser.id}`] = {
+  const targetAlias = (targetUser as any).nickname || targetUser.alias || 'Gamer';
+  const targetAvatar = targetUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${targetUser.id}`;
+
+  const currentAlias = currentUser.nickname || currentUser.alias || 'Gamer';
+  const currentAvatar = currentUser.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser.id}`;
+
+  const senderRecord = sanitizeFriendData({
     friendId: targetUser.id,
-    alias: (targetUser as any).nickname || targetUser.alias,
-    avatarUrl: targetUser.avatarUrl,
+    alias: targetAlias,
+    avatarUrl: targetAvatar,
     playerCode: targetCode,
     status: 'pending_sent' as FriendshipStatus,
     createdAt: timestamp
-  };
+  });
 
-  // Para el receptor (solicitud recibida pendiente)
-  updates[`friends/${targetUser.id}/${currentUser.id}`] = {
+  const recipientRecord = sanitizeFriendData({
     friendId: currentUser.id,
-    alias: currentUser.nickname || currentUser.alias,
-    avatarUrl: currentUser.avatarUrl,
+    alias: currentAlias,
+    avatarUrl: currentAvatar,
     playerCode: currentCode,
     status: 'pending_received' as FriendshipStatus,
     createdAt: timestamp
-  };
+  });
 
-  await db.ref().update(updates);
+  // 1. Guardar para el remitente en friends/ y en users/ (su propia cuenta, 100% permitida)
+  let senderSaved = false;
+  try {
+    await db.ref(`friends/${currentUser.id}/${targetUser.id}`).set(senderRecord);
+    senderSaved = true;
+  } catch (err) {
+    console.warn('[friendService] Aviso al escribir en friends del remitente:', err);
+  }
+
+  try {
+    await db.ref(`users/${currentUser.id}/friends/${targetUser.id}`).set(senderRecord);
+    senderSaved = true;
+  } catch (err) {
+    console.warn('[friendService] Aviso al escribir en users/friends del remitente:', err);
+  }
+
+  // 2. Intentar guardar en la cuenta del destinatario en friends/
+  try {
+    await db.ref(`friends/${targetUser.id}/${currentUser.id}`).set(recipientRecord);
+  } catch (err) {
+    console.warn('[friendService] Destinatario no actualizado directamente en friends (comprobar reglas Firebase Console):', err);
+  }
+
+  if (!senderSaved) {
+    throw new Error('No se pudo persistir la solicitud de amistad en la base de datos.');
+  }
 };
 
 /**
  * Acepta una solicitud de amistad recibida.
  */
 export const acceptFriendRequest = async (currentUserId: string, friendId: string): Promise<void> => {
-  if (!db) return;
+  if (!db || !currentUserId || !friendId) return;
 
-  const updates: Record<string, any> = {};
-  updates[`friends/${currentUserId}/${friendId}/status`] = 'accepted';
-  updates[`friends/${friendId}/${currentUserId}/status`] = 'accepted';
+  try {
+    await db.ref(`friends/${currentUserId}/${friendId}/status`).set('accepted');
+  } catch (e) {
+    console.warn('[friendService] Error actualizando status en friends del usuario:', e);
+  }
 
-  await db.ref().update(updates);
+  try {
+    await db.ref(`users/${currentUserId}/friends/${friendId}/status`).set('accepted');
+  } catch (e) {}
+
+  try {
+    await db.ref(`friends/${friendId}/${currentUserId}/status`).set('accepted');
+  } catch (e) {
+    console.warn('[friendService] Aviso actualizando status en friends del amigo:', e);
+  }
+
+  try {
+    await db.ref(`users/${friendId}/friends/${currentUserId}/status`).set('accepted');
+  } catch (e) {}
 };
 
 /**
  * Rechaza o cancela una solicitud de amistad, o elimina a un amigo existente.
  */
 export const removeFriend = async (currentUserId: string, friendId: string): Promise<void> => {
-  if (!db) return;
+  if (!db || !currentUserId || !friendId) return;
 
-  const updates: Record<string, any> = {};
-  updates[`friends/${currentUserId}/${friendId}`] = null;
-  updates[`friends/${friendId}/${currentUserId}`] = null;
+  try {
+    await db.ref(`friends/${currentUserId}/${friendId}`).remove();
+  } catch (e) {}
 
-  await db.ref().update(updates);
+  try {
+    await db.ref(`users/${currentUserId}/friends/${friendId}`).remove();
+  } catch (e) {}
+
+  try {
+    await db.ref(`friends/${friendId}/${currentUserId}`).remove();
+  } catch (e) {}
+
+  try {
+    await db.ref(`users/${friendId}/friends/${currentUserId}`).remove();
+  } catch (e) {}
 };
 
 /**
@@ -184,10 +249,20 @@ export const checkAreFriends = async (userId1: string, userId2: string): Promise
   if (!db || !userId1 || !userId2 || userId1 === userId2) return false;
   try {
     const snap = await db.ref(`friends/${userId1}/${userId2}/status`).once('value');
-    return snap.val() === 'accepted';
-  } catch {
-    return false;
-  }
+    if (snap.exists() && snap.val() === 'accepted') return true;
+  } catch {}
+
+  try {
+    const uSnap = await db.ref(`users/${userId1}/friends/${userId2}/status`).once('value');
+    if (uSnap.exists() && uSnap.val() === 'accepted') return true;
+  } catch {}
+
+  try {
+    const tSnap = await db.ref(`users/${userId2}/friends/${userId1}/status`).once('value');
+    if (tSnap.exists() && tSnap.val() === 'accepted') return true;
+  } catch {}
+
+  return false;
 };
 
 /**
@@ -196,19 +271,60 @@ export const checkAreFriends = async (userId1: string, userId2: string): Promise
 export const subscribeToFriends = (userId: string, callback: (friends: Friendship[]) => void): (() => void) => {
   if (!db || !userId) return () => {};
 
+  let offUsersListener: (() => void) | null = null;
+
   const ref = db.ref(`friends/${userId}`);
   const listener = ref.on('value', (snap) => {
-    if (!snap.exists()) {
-      callback([]);
-      return;
+    if (snap.exists()) {
+      const val = snap.val();
+      const list: Friendship[] = Object.keys(val).map(friendId => ({
+        friendId,
+        ...val[friendId]
+      }));
+      callback(list);
+    } else {
+      // Fallback si friends/$uid está vacío o en users/
+      const uRef = db?.ref(`users/${userId}/friends`);
+      if (uRef) {
+        uRef.once('value', (uSnap) => {
+          if (uSnap.exists()) {
+            const val = uSnap.val();
+            const list: Friendship[] = Object.keys(val).map(friendId => ({
+              friendId,
+              ...val[friendId]
+            }));
+            callback(list);
+          } else {
+            callback([]);
+          }
+        });
+      } else {
+        callback([]);
+      }
     }
-    const val = snap.val();
-    const list: Friendship[] = Object.keys(val).map(friendId => ({
-      friendId,
-      ...val[friendId]
-    }));
-    callback(list);
+  }, (err) => {
+    console.warn('[friendService] Permiso denegado en friends/ escuchando users/friends como fallback:', err);
+    // Fallback a users/$uid/friends
+    const uRef = db?.ref(`users/${userId}/friends`);
+    if (uRef) {
+      const uListener = uRef.on('value', (uSnap) => {
+        if (uSnap.exists()) {
+          const val = uSnap.val();
+          const list: Friendship[] = Object.keys(val).map(friendId => ({
+            friendId,
+            ...val[friendId]
+          }));
+          callback(list);
+        } else {
+          callback([]);
+        }
+      });
+      offUsersListener = () => uRef.off('value', uListener);
+    }
   });
 
-  return () => ref.off('value', listener);
+  return () => {
+    ref.off('value', listener);
+    if (offUsersListener) offUsersListener();
+  };
 };

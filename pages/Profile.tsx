@@ -136,8 +136,14 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) => {
       showAlert({ message: t('friends.requestSent'), type: 'success' });
       setSearchedUser(null);
       setSearchCode('');
-    } catch (e) {
-      showAlert({ message: t('common.error'), type: 'error' });
+    } catch (e: any) {
+      console.error('Error sending friend request:', e);
+      showAlert({ 
+        message: e?.message?.includes('permission') 
+          ? 'Error de permisos al conectar con la base de datos de amigos.'
+          : t('common.error'), 
+        type: 'error' 
+      });
     }
   };
 
