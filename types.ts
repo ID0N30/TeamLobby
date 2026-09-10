@@ -149,11 +149,15 @@ export interface Message {
 
 export interface ReadySession {
   type: 'roulette' | 'voting';
-  status: 'idle' | 'collecting' | 'results';
+  status: 'idle' | 'collecting' | 'spinning' | 'results';
   suggestions: Record<string, { gameId: string, gameTitle: string, userName: string }>;
   votes: Record<string, string>; // voterId -> gameId
   winner?: string | string[]; // gameId or array of IDs if tie
   active: boolean;
+  spinTargetGameId?: string;
+  spinStartedAt?: number;
+  spinDuration?: number;
+  targetAngle?: number;
 }
 
 export interface Room {

@@ -257,8 +257,9 @@ export const resolveReadyActivity = async (code: string) => {
     }
 
     if (session.type === 'roulette') {
-        const winner = suggestions[Math.floor(Math.random() * suggestions.length)];
-        await ref.update({ status: 'results', winner: winner.gameId });
+        if (session.status === 'results') return;
+        const winner = session.winner || session.spinTargetGameId || suggestions[Math.floor(Math.random() * suggestions.length)].gameId;
+        await ref.update({ status: 'results', winner });
     } else {
         const counts: Record<string, number> = {};
         suggestions.forEach(s => counts[s.gameId] = 0);
@@ -282,10 +283,86 @@ export const resolveReadyActivity = async (code: string) => {
     }
 };
 
+export const spinReadyRoulette = async (code: string) => {
+    if (!db) return;
+    const ref = db.ref(`${ROOMS_REF}/${code}/readySession`);
+    const snap = await ref.once('value');
+    if (!snap.exists()) return;
+    const session = snap.val() as ReadySession;
+    if (session.status === 'spinning') return;
+
+    const suggestions = Object.values(session.suggestions || {}) as Array<{ gameId: string, gameTitle: string, userName: string }>;
+    if (suggestions.length < 1) return;
+
+    // Group by unique gameId to calculate proportional slices
+    const gameCounts: Record<string, { gameId: string, gameTitle: string, count: number }> = {};
+    suggestions.forEach(s => {
+        if (!gameCounts[s.gameId]) {
+            gameCounts[s.gameId] = { gameId: s.gameId, gameTitle: s.gameTitle, count: 0 };
+        }
+        gameCounts[s.gameId].count++;
+    });
+
+    const uniqueGames = Object.values(gameCounts);
+    const totalCount = suggestions.length;
+
+    // Proportional weighted random pick
+    const rand = Math.random() * totalCount;
+    let winnerGame = uniqueGames[0];
+    let cumulative = 0;
+    for (const g of uniqueGames) {
+        cumulative += g.count;
+        if (rand <= cumulative) {
+            winnerGame = g;
+            break;
+        }
+    }
+
+    // Calculate angles of slices starting from 0 deg (3 o'clock)
+    let currentAngle = 0;
+    let winnerStartAngle = 0;
+    let winnerSliceAngle = 0;
+
+    for (const g of uniqueGames) {
+        const slice = (g.count / totalCount) * 360;
+        if (g.gameId === winnerGame.gameId) {
+            winnerStartAngle = currentAngle;
+            winnerSliceAngle = slice;
+            break;
+        }
+        currentAngle += slice;
+    }
+
+    const midAngle = winnerStartAngle + (winnerSliceAngle / 2);
+    // Keep offset safely within central 50% of the slice to avoid boundaries
+    const offset = (Math.random() - 0.5) * (winnerSliceAngle * 0.5);
+    // Needle pointer is at the top (270 deg)
+    const normalizedTarget = ((270 - (midAngle + offset)) % 360 + 360) % 360;
+    const extraSpins = 6 + Math.floor(Math.random() * 2); // 6 to 7 complete 360 deg rotations
+    const targetAngle = extraSpins * 360 + normalizedTarget;
+
+    await ref.update({
+        status: 'spinning',
+        spinTargetGameId: winnerGame.gameId,
+        spinStartedAt: Date.now(),
+        spinDuration: 6500,
+        targetAngle,
+        winner: winnerGame.gameId
+    });
+};
+
 export const resetReadyActivity = async (code: string) => {
     if (!db) return;
     await db.ref(`${ROOMS_REF}/${code}/readySession`).update({
-        status: 'idle', active: false, suggestions: {}, votes: {}, winner: null
+        status: 'idle',
+        active: false,
+        suggestions: {},
+        votes: {},
+        winner: null,
+        spinTargetGameId: null,
+        spinStartedAt: null,
+        spinDuration: null,
+        targetAngle: null
     });
 };
 

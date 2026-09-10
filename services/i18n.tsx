@@ -151,6 +151,12 @@ const translations = {
     'lobby.chosenByDestiny': 'CHOSEN BY DESTINY',
     'lobby.restart': 'RESTART',
     'lobby.readyMinSuggestions': 'At least 2 proposed games are required.',
+    'lobby.spinRoulette': 'SPIN ROULETTE',
+    'lobby.spinning': 'Spinning the wheel...',
+    'lobby.rouletteChances': 'Odds',
+    'lobby.rouletteWinnerAnnounce': 'The wheel has chosen!',
+    'lobby.rouletteLiveNotice': 'Synchronized live for all squad members',
+    'lobby.noSlicesYet': 'Propose at least 2 games to activate the roulette wheel',
 
     // genres
     'genre.Action': 'Action',
@@ -469,6 +475,12 @@ const translations = {
     'lobby.chosenByDestiny': 'ELEGIDO POR EL DESTINO',
     'lobby.restart': 'REINICIAR',
     'lobby.readyMinSuggestions': 'Se requieren al menos 2 juegos propuestos.',
+    'lobby.spinRoulette': 'GIRAR RULETA',
+    'lobby.spinning': 'Girando la ruleta...',
+    'lobby.rouletteChances': 'Probabilidad',
+    'lobby.rouletteWinnerAnnounce': '¡La ruleta ha elegido!',
+    'lobby.rouletteLiveNotice': 'Sincronizada en vivo para todo el equipo',
+    'lobby.noSlicesYet': 'Propón al menos 2 juegos para activar la ruleta',
 
     // genres
     'genre.Action': 'Acción',

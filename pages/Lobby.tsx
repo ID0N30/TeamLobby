@@ -13,12 +13,13 @@ import {
   subscribeToRoom, addGameToRoom, voteForGame, sendChatMessage,
   toggleUserReadyState, removeGameFromRoom, addCommentToGame, updateGameInRoom, leaveRoomCleanly, cleanupRoomMembers,
   startReadyActivity, submitReadySuggestion, submitReadyVote, resolveReadyActivity, resetReadyActivity, joinRoom,
-  setupRoomPresence
+  setupRoomPresence, spinReadyRoulette
 } from '../services/roomService';
 import { soundService } from '../services/soundService';
 import { searchGamesAutocomplete, GameSuggestion } from '../services/gameSearchService';
 import Chat from '../components/Chat';
 import GameCard from '../components/GameCard';
+import RouletteWheel, { RouletteOption, getOptionColor } from '../components/RouletteWheel';
 import { useLanguage, TranslationKey } from '../services/i18n';
 import { useAlert } from '../components/CustomModal';
 import { useAuthModal } from '../components/LoginModal';
@@ -74,7 +75,7 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
     const [newGameDesc, setNewGameDesc] = useState('');
     const [showAllGenres, setShowAllGenres] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
-    const [isSpinning, setIsSpinning] = useState(false);
+    const isSpinning = room?.readySession?.status === 'spinning';
 
     const [isMuted, setIsMuted] = useState(soundService.isMuted());
     const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<GameSuggestion[]>([]);
@@ -291,28 +292,19 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
             return;
         }
         if (room.readySession.type === 'roulette') {
-            setIsSpinning(true);
-            let delay = 60;
-            let elapsed = 0;
-            const tick = () => {
-                soundService.playRouletteTick(1 + Math.random() * 0.15);
-                elapsed += delay;
-                delay = Math.min(delay * 1.08, 400);
-                if (elapsed < 2800) {
-                    setTimeout(tick, delay);
-                }
-            };
-            tick();
-
-            setTimeout(() => {
-                resolveReadyActivity(room.code);
-                setIsSpinning(false);
-                soundService.playVictory();
-            }, 3000);
+            soundService.playPop();
+            spinReadyRoulette(room.code);
         } else {
             resolveReadyActivity(room.code);
             soundService.playVictory();
         }
+    };
+
+    const handleRouletteComplete = () => {
+        if (!room?.code) return;
+        setTimeout(() => {
+            resolveReadyActivity(room.code);
+        }, 1800);
     };
 
     const handleSaveGame = async () => {
@@ -406,6 +398,29 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
     const isUserReady = !!currentUserMember?.isReady;
 
     const suggestions = room.readySession?.suggestions || {};
+    const rouletteOptions: RouletteOption[] = useMemo(() => {
+        if (!room?.readySession?.suggestions) return [];
+        const suggList = Object.values(room.readySession.suggestions);
+        const total = suggList.length;
+        if (total === 0) return [];
+
+        const map: Record<string, { gameId: string, gameTitle: string, count: number }> = {};
+        suggList.forEach(s => {
+            if (!map[s.gameId]) {
+                map[s.gameId] = { gameId: s.gameId, gameTitle: s.gameTitle, count: 0 };
+            }
+            map[s.gameId].count++;
+        });
+
+        return Object.values(map).map((item, idx) => ({
+            gameId: item.gameId,
+            gameTitle: item.gameTitle,
+            count: item.count,
+            percentage: (item.count / total) * 100,
+            color: getOptionColor(idx),
+            imageUrl: room.gameQueue?.find(g => g.id === item.gameId)?.imageUrl
+        }));
+    }, [room?.readySession?.suggestions, room?.gameQueue]);
     const genres = Object.values(GameGenre);
     const visibleGenres = showAllGenres ? genres : genres.slice(0, 5);
 
@@ -737,17 +752,136 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
                                 </div>
                              ) : (
                                 <div className="w-full bg-surface border border-gray-800 rounded-[3rem] p-8 md:p-12 space-y-10 shadow-2xl relative overflow-hidden">
+                                    {/* CABECERA DE LA ACTIVIDAD */}
                                     <div className="flex justify-between items-center">
                                         <div className="flex items-center gap-4">
                                             <div className="p-3 bg-gray-900 rounded-2xl border border-gray-800">
                                                 {room.readySession.type === 'roulette' ? <Dices className="text-primary"/> : <Vote className="text-secondary"/>}
                                             </div>
-                                            <h3 className="text-xl font-black italic uppercase text-white">{room.readySession.type === 'roulette' ? t('lobby.roulette') : t('lobby.voting')}</h3>
+                                            <div>
+                                                <h3 className="text-xl font-black italic uppercase text-white leading-none">
+                                                    {room.readySession.type === 'roulette' ? t('lobby.roulette') : t('lobby.voting')}
+                                                </h3>
+                                                <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">
+                                                    {room.readySession.status === 'spinning' 
+                                                        ? t('lobby.spinning') 
+                                                        : room.readySession.status === 'results' 
+                                                            ? t('lobby.finalResult') 
+                                                            : t('lobby.rouletteLiveNotice')}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <button onClick={() => resetReadyActivity(room.code)} className="p-3 hover:bg-gray-800 rounded-xl transition-all"><RefreshCcw size={20}/></button>
+                                        <button onClick={() => resetReadyActivity(room.code)} className="p-3 hover:bg-gray-800 text-gray-400 hover:text-white rounded-xl transition-all" title={t('lobby.restart')}>
+                                            <RefreshCcw size={20}/>
+                                        </button>
                                     </div>
                                     
-                                    {room.readySession.status === 'collecting' && (
+                                    {/* MODO RULETA: FASE DE RECOLECCIÓN Y GIRO */}
+                                    {room.readySession.type === 'roulette' && (room.readySession.status === 'collecting' || room.readySession.status === 'spinning') && (
+                                        <div className="space-y-8 animate-in fade-in duration-300">
+                                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                                                {/* Columna Izquierda: Selección de propuestas y probabilidades */}
+                                                <div className="lg:col-span-5 space-y-6">
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{t('lobby.proposals')}</h4>
+                                                            <span className="text-[9px] font-bold text-primary uppercase tracking-wider">{Object.keys(suggestions).length} {t('lobby.onStage')}</span>
+                                                        </div>
+
+                                                        {room.readySession.status === 'collecting' ? (
+                                                            <div className="grid grid-cols-1 gap-2 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                                                                {room.gameQueue.map(g => {
+                                                                    const isSuggested = suggestions[currentUser.id]?.gameId === g.id;
+                                                                    return (
+                                                                        <button 
+                                                                            key={g.id} 
+                                                                            onClick={() => handleReadySuggestion(g)} 
+                                                                            className={`flex items-center justify-between p-3 rounded-xl border transition-all text-left text-xs font-black ${
+                                                                                isSuggested 
+                                                                                    ? 'bg-primary/20 border-primary text-white shadow-md shadow-primary/10' 
+                                                                                    : 'bg-black/30 border-gray-800 text-gray-400 hover:border-gray-700 hover:text-white'
+                                                                            }`}
+                                                                        >
+                                                                            <span className="truncate pr-2">{g.title}</span>
+                                                                            {isSuggested && <CheckCircle2 size={16} className="text-primary shrink-0"/>}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                                {room.gameQueue.length === 0 && (
+                                                                    <p className="text-xs text-gray-500 italic py-4 text-center">{t('lobby.queueEmpty')}</p>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl flex items-center gap-3 animate-pulse">
+                                                                <Dices size={20} className="text-primary shrink-0" />
+                                                                <div className="min-w-0">
+                                                                    <p className="text-xs font-black text-white uppercase tracking-wider">{t('lobby.spinning')}</p>
+                                                                    <p className="text-[9px] text-gray-400 font-bold">{t('lobby.rouletteLiveNotice')}</p>
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Porcentajes proporcionales en la ruleta */}
+                                                    <div className="space-y-2">
+                                                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{t('lobby.rouletteChances')}</h4>
+                                                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                                                            {rouletteOptions.length === 0 ? (
+                                                                <p className="text-[11px] font-bold text-gray-600 italic py-2">{t('lobby.noSlicesYet')}</p>
+                                                            ) : (
+                                                                rouletteOptions.map(opt => (
+                                                                    <div key={opt.gameId} className="flex items-center justify-between p-2.5 bg-gray-900/60 border border-gray-800/60 rounded-xl text-xs">
+                                                                        <div className="flex items-center gap-2.5 min-w-0">
+                                                                            <span className="w-3 h-3 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: opt.color }} />
+                                                                            <span className="font-black text-gray-200 truncate text-[11px]">{opt.gameTitle}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 shrink-0">
+                                                                            <span className="text-[9px] font-bold text-gray-500">{opt.count} {opt.count === 1 ? 'voto' : 'votos'}</span>
+                                                                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-white/5 border border-white/10 text-white">
+                                                                                {opt.percentage.toFixed(0)}%
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Columna Derecha: Componente de Ruleta Gráfica */}
+                                                <div className="lg:col-span-7 flex flex-col items-center justify-center p-2">
+                                                    <RouletteWheel 
+                                                        options={rouletteOptions}
+                                                        targetAngle={room.readySession.targetAngle}
+                                                        isSpinning={room.readySession.status === 'spinning'}
+                                                        spinStartedAt={room.readySession.spinStartedAt}
+                                                        spinDuration={room.readySession.spinDuration || 6500}
+                                                        onSpinComplete={handleRouletteComplete}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* Botón de acción para iniciar el giro */}
+                                            {room.readySession.status === 'collecting' ? (
+                                                <button 
+                                                    onClick={handleAdvancePhase} 
+                                                    disabled={Object.keys(suggestions).length < 2} 
+                                                    className="w-full py-5 bg-gradient-to-r from-primary via-violet-600 to-indigo-600 hover:brightness-110 text-white font-black text-xs uppercase tracking-[0.2em] rounded-[2rem] flex items-center justify-center gap-3 shadow-xl shadow-primary/25 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+                                                >
+                                                    <Dices size={22}/>
+                                                    {t('lobby.spinRoulette')}
+                                                </button>
+                                            ) : (
+                                                <div className="w-full py-5 bg-gray-900 border border-gray-800 text-gray-400 font-black text-xs uppercase tracking-[0.2em] rounded-[2rem] flex items-center justify-center gap-3">
+                                                    <Loader2 className="animate-spin text-primary" size={20}/>
+                                                    {t('lobby.spinning')}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* MODO VOTACIÓN: FASE DE RECOLECCIÓN */}
+                                    {room.readySession.type === 'voting' && room.readySession.status === 'collecting' && (
                                         <div className="space-y-10">
                                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                                                 <div className="space-y-4">
@@ -775,26 +909,54 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
                                                     </div>
                                                 </div>
                                             </div>
-                                            <button onClick={handleAdvancePhase} disabled={isSpinning || Object.keys(suggestions).length < 2} className="w-full py-6 bg-white text-black font-black uppercase rounded-[2rem] flex items-center justify-center gap-3 shadow-xl hover:bg-gray-200 transition-all disabled:opacity-50">
-                                                {isSpinning ? <Loader2 className="animate-spin" /> : <PlayCircle size={20}/>}
+                                            <button onClick={handleAdvancePhase} disabled={Object.keys(suggestions).length < 2} className="w-full py-6 bg-white text-black font-black uppercase rounded-[2rem] flex items-center justify-center gap-3 shadow-xl hover:bg-gray-200 transition-all disabled:opacity-50">
+                                                <PlayCircle size={20}/>
                                                 {t('lobby.processActivity')}
                                             </button>
                                         </div>
                                     )}
 
+                                    {/* RESULTADO FINAL (AMBOS MODOS) */}
                                     {room.readySession.status === 'results' && (
-                                        <div className="text-center py-12 space-y-8">
+                                        <div className="text-center py-8 space-y-8 animate-in zoom-in-95 duration-500">
                                             <div className="relative inline-block">
                                                 <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full" />
                                                 <Trophy size={80} className="text-yellow-500 mx-auto drop-shadow-[0_0_15px_rgba(234,179,8,0.5)] relative z-10"/>
                                             </div>
-                                            <div className="space-y-2">
-                                                <p className="text-[10px] font-black text-gray-600 uppercase tracking-[0.4em]">{t('lobby.finalResult')}</p>
-                                                <h4 className="text-4xl font-black italic uppercase text-white drop-shadow-xl tracking-tighter">
-                                                    {Array.isArray(room.readySession.winner) ? t('lobby.technicalTie') : (room.gameQueue.find(g => g.id === room.readySession?.winner)?.title || t('lobby.chosenByDestiny'))}
+                                            <div className="space-y-3">
+                                                <p className="text-[10px] font-black text-primary uppercase tracking-[0.4em]">
+                                                    {room.readySession.type === 'roulette' ? t('lobby.rouletteWinnerAnnounce') : t('lobby.finalResult')}
+                                                </p>
+                                                <h4 className="text-3xl md:text-5xl font-black italic uppercase text-white drop-shadow-xl tracking-tighter">
+                                                    {Array.isArray(room.readySession.winner) 
+                                                        ? t('lobby.technicalTie') 
+                                                        : (room.gameQueue.find(g => g.id === room.readySession?.winner)?.title || (typeof room.readySession.winner === 'string' ? room.readySession.winner : t('lobby.chosenByDestiny')))}
                                                 </h4>
+                                                {(() => {
+                                                    const winnerGame = !Array.isArray(room.readySession.winner) ? room.gameQueue.find(g => g.id === room.readySession?.winner) : null;
+                                                    if (!winnerGame) return null;
+                                                    return (
+                                                        <div className="max-w-md mx-auto pt-4">
+                                                            <div 
+                                                                onClick={() => setSelectedGame(winnerGame)}
+                                                                className="p-4 bg-gray-900/80 border border-primary/40 rounded-2xl flex items-center gap-4 cursor-pointer hover:border-primary transition-all shadow-xl text-left group"
+                                                            >
+                                                                {winnerGame.imageUrl && (
+                                                                    <img src={winnerGame.imageUrl} alt={winnerGame.title} className="w-16 h-16 rounded-xl object-cover shrink-0 border border-gray-800 group-hover:scale-105 transition-transform" />
+                                                                )}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <h5 className="text-sm font-black text-white truncate">{winnerGame.title}</h5>
+                                                                    <span className="text-[9px] font-black uppercase text-primary tracking-wider">{t(`genre.${winnerGame.genre}` as TranslationKey) || winnerGame.genre}</span>
+                                                                </div>
+                                                                <span className="text-[10px] font-black text-primary uppercase tracking-wider group-hover:underline shrink-0">{t('lobby.viewStore')}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
-                                            <button onClick={() => resetReadyActivity(room.code)} className="px-12 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all">{t('lobby.restart')}</button>
+                                            <div className="flex justify-center gap-4">
+                                                <button onClick={() => resetReadyActivity(room.code)} className="px-12 py-4 bg-gray-800 border border-gray-700 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-white hover:text-black transition-all shadow-lg active:scale-95">{t('lobby.restart')}</button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
