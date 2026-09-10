@@ -220,6 +220,30 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
         });
     }, [members, room?.activePresence, currentUser.id]);
 
+    const rouletteOptions: RouletteOption[] = useMemo(() => {
+        if (!room?.readySession?.suggestions) return [];
+        const suggList = Object.values(room.readySession.suggestions);
+        const total = suggList.length;
+        if (total === 0) return [];
+
+        const map: Record<string, { gameId: string, gameTitle: string, count: number }> = {};
+        suggList.forEach(s => {
+            if (!map[s.gameId]) {
+                map[s.gameId] = { gameId: s.gameId, gameTitle: s.gameTitle, count: 0 };
+            }
+            map[s.gameId].count++;
+        });
+
+        return Object.values(map).map((item, idx) => ({
+            gameId: item.gameId,
+            gameTitle: item.gameTitle,
+            count: item.count,
+            percentage: (item.count / total) * 100,
+            color: getOptionColor(idx),
+            imageUrl: room.gameQueue?.find(g => g.id === item.gameId)?.imageUrl
+        }));
+    }, [room?.readySession?.suggestions, room?.gameQueue]);
+
     const handleCopyCode = () => {
         if (code) {
             soundService.playPop();
@@ -398,29 +422,6 @@ const Lobby: React.FC<LobbyProps> = ({ currentUser }) => {
     const isUserReady = !!currentUserMember?.isReady;
 
     const suggestions = room.readySession?.suggestions || {};
-    const rouletteOptions: RouletteOption[] = useMemo(() => {
-        if (!room?.readySession?.suggestions) return [];
-        const suggList = Object.values(room.readySession.suggestions);
-        const total = suggList.length;
-        if (total === 0) return [];
-
-        const map: Record<string, { gameId: string, gameTitle: string, count: number }> = {};
-        suggList.forEach(s => {
-            if (!map[s.gameId]) {
-                map[s.gameId] = { gameId: s.gameId, gameTitle: s.gameTitle, count: 0 };
-            }
-            map[s.gameId].count++;
-        });
-
-        return Object.values(map).map((item, idx) => ({
-            gameId: item.gameId,
-            gameTitle: item.gameTitle,
-            count: item.count,
-            percentage: (item.count / total) * 100,
-            color: getOptionColor(idx),
-            imageUrl: room.gameQueue?.find(g => g.id === item.gameId)?.imageUrl
-        }));
-    }, [room?.readySession?.suggestions, room?.gameQueue]);
     const genres = Object.values(GameGenre);
     const visibleGenres = showAllGenres ? genres : genres.slice(0, 5);
 
