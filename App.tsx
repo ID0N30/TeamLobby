@@ -48,7 +48,13 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     let profileUnsub = () => {};
 
+    // Watchdog de seguridad: Máximo 3.5 segundos en la pantalla de carga inicial
+    const safetyTimer = setTimeout(() => {
+      setIsAuthChecking(false);
+    }, 3500);
+
     const unsubscribe = onAuthStateChange((user) => {
+      clearTimeout(safetyTimer);
       if (user && !user.isGuest) {
         setCurrentUser(user);
         profileUnsub = subscribeToUserProfile(user.id, (dbData) => {
@@ -63,6 +69,7 @@ const AppContent: React.FC = () => {
     });
 
     return () => {
+      clearTimeout(safetyTimer);
       unsubscribe();
       profileUnsub();
     };

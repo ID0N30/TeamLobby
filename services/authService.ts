@@ -12,69 +12,103 @@ export const onAuthStateChange = (callback: (user: User | null) => void) => {
             return;
         }
 
-        const uid = firebaseUser.uid;
+        try {
+            const uid = firebaseUser.uid;
 
-        let isAdmin = false;
-        const adminSnap = await db?.ref(`admins/${uid}`).once("value");
-        isAdmin = adminSnap?.val() === true;
-
-        const userRef = db?.ref(`users/${uid}`);
-        const snapshot = await userRef?.once('value');
-        const dbUser = snapshot?.val();
-
-        if (dbUser && dbUser.isBanned) {
-            const bannedUser: User = { ...dbUser, id: uid, isGuest: false, isAdmin };
-            callback(bannedUser);
-            return;
-        }
-
-        const assignedPlayerCode = dbUser?.playerCode || generateCodeFromUid(uid);
-
-        const user: User = {
-            id: uid,
-            alias: firebaseUser.displayName || "Gamer",
-            ...(dbUser?.nickname ? { nickname: dbUser.nickname } : {}),
-            email: firebaseUser.email || "",
-            avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
-            platforms: dbUser?.platforms || [Platform.PC],
-            isReady: false,
-            isGuest: false,
-            isAdmin,
-            isBanned: dbUser?.isBanned || false,
-            isMuted: dbUser?.isMuted || false,
-            playerCode: assignedPlayerCode,
-            showcasePrivacy: dbUser?.showcasePrivacy || 'public'
-        };
-
-        if (db) {
+            let isAdmin = false;
             try {
-                await db.ref(`playerCodes/${assignedPlayerCode}`).set(uid);
-            } catch (e) {}
+                const adminSnap = await db?.ref(`admins/${uid}`).once("value");
+                isAdmin = adminSnap?.val() === true;
+            } catch (adminErr) {
+                // Si el usuario no tiene permisos en /admins o no existe, no es admin (no debe crashear)
+                isAdmin = false;
+            }
+
+            let dbUser: any = null;
+            try {
+                const userRef = db?.ref(`users/${uid}`);
+                const snapshot = await userRef?.once('value');
+                dbUser = snapshot?.val();
+            } catch (dbUserErr) {
+                console.warn('[authService] Error al leer datos de usuario en DB:', dbUserErr);
+            }
+
+            if (dbUser && dbUser.isBanned) {
+                const bannedUser: User = { ...dbUser, id: uid, isGuest: false, isAdmin };
+                callback(bannedUser);
+                return;
+            }
+
+            const assignedPlayerCode = dbUser?.playerCode || generateCodeFromUid(uid);
+
+            const user: User = {
+                id: uid,
+                alias: firebaseUser.displayName || "Gamer",
+                ...(dbUser?.nickname ? { nickname: dbUser.nickname } : {}),
+                email: firebaseUser.email || "",
+                avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${uid}`,
+                platforms: dbUser?.platforms || [Platform.PC],
+                isReady: false,
+                isGuest: false,
+                isAdmin,
+                isBanned: dbUser?.isBanned || false,
+                isMuted: dbUser?.isMuted || false,
+                playerCode: assignedPlayerCode,
+                showcasePrivacy: dbUser?.showcasePrivacy || 'public'
+            };
+
+            if (db) {
+                try {
+                    await db.ref(`playerCodes/${assignedPlayerCode}`).set(uid);
+                } catch (e) {}
+            }
+
+            const updates: Record<string, any> = {
+                [`users/${uid}/alias`]: user.alias,
+                [`users/${uid}/email`]: user.email,
+                [`users/${uid}/avatarUrl`]: user.avatarUrl,
+                [`users/${uid}/isAdmin`]: isAdmin,
+                [`users/${uid}/isGuest`]: false,
+                [`users/${uid}/lastLogin`]: Date.now(),
+
+                [`userSummaries/${uid}/alias`]: user.alias,
+                [`userSummaries/${uid}/avatarUrl`]: user.avatarUrl,
+                [`userSummaries/${uid}/isAdmin`]: isAdmin,
+                [`userSummaries/${uid}/isBanned`]: user.isBanned,
+                [`userSummaries/${uid}/isMuted`]: user.isMuted,
+            };
+
+            if (assignedPlayerCode) {
+                updates[`users/${uid}/playerCode`] = assignedPlayerCode;
+                updates[`userSummaries/${uid}/playerCode`] = assignedPlayerCode;
+            }
+
+            try {
+                await db?.ref().update(updates);
+            } catch (updateErr) {
+                console.warn('[authService] Error al actualizar usuario en DB:', updateErr);
+            }
+
+            callback(user);
+        } catch (fatalErr) {
+            console.error('[authService] Error crítico en onAuthStateChanged, aplicando fallback:', fatalErr);
+            // Fallback de usuario para garantizar que nunca se quede colgado en el loading
+            const fallbackUser: User = {
+                id: firebaseUser.uid,
+                alias: firebaseUser.displayName || "Gamer",
+                email: firebaseUser.email || "",
+                avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${firebaseUser.uid}`,
+                platforms: [Platform.PC],
+                isReady: false,
+                isGuest: false,
+                isAdmin: false,
+                isBanned: false,
+                isMuted: false,
+                playerCode: generateCodeFromUid(firebaseUser.uid),
+                showcasePrivacy: 'public'
+            };
+            callback(fallbackUser);
         }
-
-        const updates: Record<string, any> = {
-            [`users/${uid}/alias`]: user.alias,
-            [`users/${uid}/email`]: user.email,
-            [`users/${uid}/avatarUrl`]: user.avatarUrl,
-            [`users/${uid}/isAdmin`]: isAdmin,
-            [`users/${uid}/isGuest`]: false,
-            [`users/${uid}/lastLogin`]: Date.now(),
-
-            [`userSummaries/${uid}/alias`]: user.alias,
-            [`userSummaries/${uid}/avatarUrl`]: user.avatarUrl,
-            [`userSummaries/${uid}/isAdmin`]: isAdmin,
-            [`userSummaries/${uid}/isBanned`]: user.isBanned,
-            [`userSummaries/${uid}/isMuted`]: user.isMuted,
-        };
-
-        if (assignedPlayerCode) {
-            updates[`users/${uid}/playerCode`] = assignedPlayerCode;
-            updates[`userSummaries/${uid}/playerCode`] = assignedPlayerCode;
-        }
-
-        await db?.ref().update(updates);
-
-        callback(user);
     });
 };
 
