@@ -286,6 +286,11 @@ const translations = {
     'friends.userNotFound': 'No player found with this code.',
     'friends.viewShowcase': 'View Gallery',
     'friends.addFriend': 'Add Friend',
+    'friends.copyCode': 'Copy Code',
+    'friends.copied': 'Copied!',
+    'friends.friendsBadge': 'Friends',
+    'friends.pendingSentBadge': 'Request Sent',
+    'friends.requestAccepted': 'Friend request accepted!',
 
     // challenges
     'challenges.title': 'Gamer Challenges',
@@ -610,6 +615,11 @@ const translations = {
     'friends.userNotFound': 'No se encontró ningún jugador con este código.',
     'friends.viewShowcase': 'Ver Galería',
     'friends.addFriend': 'Añadir Amigo',
+    'friends.copyCode': 'Copiar Código',
+    'friends.copied': '¡Copiado!',
+    'friends.friendsBadge': 'Amigos',
+    'friends.pendingSentBadge': 'Solicitud Enviada',
+    'friends.requestAccepted': '¡Solicitud de amistad aceptada!',
 
     // challenges
     'challenges.title': 'Retos Gamer',

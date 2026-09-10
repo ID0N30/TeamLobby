@@ -3,7 +3,8 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Plus, Trophy, Flame, Shield, Users, Star, 
   MessageSquare, Lock, Globe, Share2, Copy, Check, Swords, 
-  Trash2, Edit3, Sparkles, Send, Gamepad2, AlertCircle, X, ExternalLink
+  Trash2, Edit3, Sparkles, Send, Gamepad2, AlertCircle, X, ExternalLink,
+  UserPlus, UserCheck, Clock
 } from 'lucide-react';
 import { 
   User, ShowcaseGame, ShowcaseComment, ShowcasePrivacy, 
@@ -15,7 +16,7 @@ import {
   getUserShowcasePrivacy, updateShowcasePrivacy 
 } from '../services/showcaseService';
 import { 
-  checkAreFriends, subscribeToFriends, sendFriendRequest, 
+  checkAreFriends, subscribeToFriends, sendFriendRequest, acceptFriendRequest,
   ensurePlayerCode, generateCodeFromUid 
 } from '../services/friendService';
 import { createChallenge } from '../services/challengeService';
@@ -52,6 +53,8 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
   const [isFriend, setIsFriend] = useState(false);
   const [myFriends, setMyFriends] = useState<Friendship[]>([]);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [friendshipStatus, setFriendshipStatus] = useState<'none' | 'pending_sent' | 'pending_received' | 'accepted'>('none');
+  const [isSendingRequest, setIsSendingRequest] = useState(false);
 
   // Filtros
   const [filter, setFilter] = useState<'all' | GameStatus | 'hardcore'>('all');
@@ -115,14 +118,39 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
             const u = snap.val();
             setTargetUser({
               id: targetUserId,
-              alias: u.alias,
+              alias: u.alias || u.nickname || 'Gamer',
               nickname: u.nickname,
               avatarUrl: u.avatarUrl,
               playerCode: u.playerCode || generateCodeFromUid(targetUserId)
             });
+          } else {
+            const sumSnap = await db?.ref(`userSummaries/${targetUserId}`).once('value');
+            if (sumSnap?.exists()) {
+              const u = sumSnap.val();
+              setTargetUser({
+                id: targetUserId,
+                alias: u.alias || u.nickname || 'Gamer',
+                nickname: u.nickname,
+                avatarUrl: u.avatarUrl,
+                playerCode: u.playerCode || generateCodeFromUid(targetUserId)
+              });
+            } else {
+              setTargetUser({
+                id: targetUserId,
+                alias: 'Gamer',
+                avatarUrl: '',
+                playerCode: generateCodeFromUid(targetUserId)
+              });
+            }
           }
         } catch (e) {
           console.error(e);
+          setTargetUser({
+            id: targetUserId,
+            alias: 'Gamer',
+            avatarUrl: '',
+            playerCode: generateCodeFromUid(targetUserId)
+          });
         }
       }
 
@@ -166,6 +194,31 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
     });
     return () => unsub();
   }, [currentUser.id]);
+
+  // Escuchar estado de amistad en tiempo real con el jugador objetivo
+  useEffect(() => {
+    if (!currentUser?.id || currentUser.isGuest || !targetUserId || isOwner) {
+      setFriendshipStatus('none');
+      return;
+    }
+    if (!db) return;
+    const ref = db.ref(`friends/${currentUser.id}/${targetUserId}`);
+    const listener = ref.on('value', (snap) => {
+      if (snap.exists() && snap.val()?.status) {
+        const st = snap.val().status;
+        setFriendshipStatus(st);
+        if (st === 'accepted') {
+          setIsFriend(true);
+          setHasAccess(true);
+        }
+      } else {
+        setFriendshipStatus('none');
+      }
+    });
+    return () => {
+      ref.off('value', listener);
+    };
+  }, [currentUser?.id, currentUser?.isGuest, targetUserId, isOwner]);
 
   // Buscar juegos en Steam / curados con debounce
   useEffect(() => {
@@ -331,14 +384,6 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
     await updateShowcasePrivacy(currentUser.id, nextPrivacy);
   };
 
-  const handleCopyCode = () => {
-    if (!targetUser?.playerCode) return;
-    soundService.playPop();
-    navigator.clipboard.writeText(targetUser.playerCode);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
-  };
-
   const handleAddComment = async () => {
     if (currentUser.isGuest) {
       openLoginModal('auth.commentReason');
@@ -412,6 +457,54 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
       showAlert({ message: t('common.error'), type: 'error' });
     } finally {
       setIsSubmittingChallenge(false);
+    }
+  };
+
+  const handleCopyCode = async () => {
+    if (!targetUser?.playerCode) return;
+    try {
+      await navigator.clipboard.writeText(`#${targetUser.playerCode}`);
+      setCopiedCode(true);
+      soundService.playPop();
+      showAlert({ 
+        message: `${t('friends.codeCopied')}: #${targetUser.playerCode}`, 
+        type: 'success' 
+      });
+      setTimeout(() => setCopiedCode(false), 2500);
+    } catch (e) {
+      console.error('Error copying player code:', e);
+    }
+  };
+
+  const handleSendFriendRequest = async () => {
+    if (currentUser.isGuest) {
+      openLoginModal('auth.login');
+      return;
+    }
+    if (!targetUser || isOwner) return;
+
+    setIsSendingRequest(true);
+    try {
+      soundService.playPop();
+      await sendFriendRequest(currentUser, targetUser);
+      showAlert({ message: t('friends.requestSent'), type: 'success' });
+    } catch (e) {
+      console.error('Error sending friend request:', e);
+      showAlert({ message: t('common.error'), type: 'error' });
+    } finally {
+      setIsSendingRequest(false);
+    }
+  };
+
+  const handleAcceptFriend = async () => {
+    if (currentUser.isGuest || !targetUserId) return;
+    try {
+      soundService.playChime();
+      await acceptFriendRequest(currentUser.id, targetUserId);
+      showAlert({ message: t('friends.requestAccepted'), type: 'success' });
+    } catch (e) {
+      console.error('Error accepting friend request:', e);
+      showAlert({ message: t('common.error'), type: 'error' });
     }
   };
 
@@ -590,17 +683,61 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
                   )}
                 </div>
 
-                {/* Código de Jugador */}
-                {targetUser?.playerCode && (
-                  <button 
-                    onClick={handleCopyCode}
-                    className="flex items-center gap-1.5 mt-1 text-[11px] font-mono font-bold text-gray-400 hover:text-white transition-colors bg-black/40 px-2.5 py-1 rounded-lg border border-gray-800"
-                    title={t('friends.codeCopied')}
-                  >
-                    <span className="text-primary font-black">#{targetUser.playerCode}</span>
-                    {copiedCode ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  </button>
-                )}
+                {/* Código de Jugador y Acciones de Amistad */}
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  {targetUser?.playerCode && (
+                    <button 
+                      onClick={handleCopyCode}
+                      className="group flex items-center gap-2 px-3 py-1.5 bg-black/50 hover:bg-black/80 border border-gray-800 hover:border-primary/50 text-gray-300 hover:text-white rounded-xl text-xs font-mono font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
+                      title={t('friends.copyCode')}
+                    >
+                      <span className="text-[10px] font-sans font-black text-gray-500 uppercase tracking-wider">ID:</span>
+                      <span className="text-primary font-black">#{targetUser.playerCode}</span>
+                      {copiedCode ? (
+                        <span className="flex items-center gap-1 text-emerald-400 text-[10px] font-sans font-black">
+                          <Check size={13} className="text-emerald-400" />
+                          <span>{t('friends.copied')}</span>
+                        </span>
+                      ) : (
+                        <Copy size={13} className="text-gray-400 group-hover:text-primary transition-colors" />
+                      )}
+                    </button>
+                  )}
+
+                  {/* Botón / Estado de Amistad (al visitar a otro jugador) */}
+                  {!isOwner && targetUserId && (
+                    <>
+                      {friendshipStatus === 'accepted' || isFriend ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm">
+                          <UserCheck size={14} />
+                          <span>{t('friends.friendsBadge')}</span>
+                        </span>
+                      ) : friendshipStatus === 'pending_sent' ? (
+                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl text-xs font-black uppercase tracking-wider shadow-sm">
+                          <Clock size={14} />
+                          <span>{t('friends.pendingSentBadge')}</span>
+                        </span>
+                      ) : friendshipStatus === 'pending_received' ? (
+                        <button
+                          onClick={handleAcceptFriend}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg active:scale-95 cursor-pointer"
+                        >
+                          <UserCheck size={14} />
+                          <span>{t('friends.accept')}</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleSendFriendRequest}
+                          disabled={isSendingRequest}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-primary hover:bg-violet-600 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-primary/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          <UserPlus size={14} />
+                          <span>{isSendingRequest ? '...' : t('friends.addFriend')}</span>
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -660,18 +797,30 @@ const Showcase: React.FC<ShowcaseProps> = ({ currentUser }) => {
             <p className="text-xs text-gray-500 font-bold">
               Para ver la galería de {targetUser?.nickname || targetUser?.alias}, debes ser su amigo en TeamLobby.
             </p>
-            {!isFriend && !currentUser.isGuest && (
-              <button 
-                onClick={() => {
-                  if (targetUser) {
-                    sendFriendRequest(currentUser, targetUser);
-                    showAlert({ message: t('friends.requestSent'), type: 'success' });
-                  }
-                }}
-                className="px-6 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-violet-600 transition-all shadow-lg active:scale-95"
-              >
-                {t('friends.sendRequest')}
-              </button>
+            {!isFriend && (
+              <div className="pt-2">
+                {friendshipStatus === 'pending_sent' ? (
+                  <div className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-xl font-black text-xs uppercase tracking-widest">
+                    <Clock size={15} />
+                    <span>{t('friends.pendingSentBadge')}</span>
+                  </div>
+                ) : friendshipStatus === 'pending_received' ? (
+                  <button 
+                    onClick={handleAcceptFriend}
+                    className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg active:scale-95 cursor-pointer"
+                  >
+                    {t('friends.accept')}
+                  </button>
+                ) : (
+                  <button 
+                    onClick={handleSendFriendRequest}
+                    disabled={isSendingRequest}
+                    className="px-6 py-3 bg-primary text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-violet-600 transition-all shadow-lg active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    {t('friends.sendRequest')}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         ) : (

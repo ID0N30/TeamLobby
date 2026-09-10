@@ -411,13 +411,17 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) => {
               {/* Resultado de búsqueda */}
               {searchedUser && (
                 <div className="p-3 bg-black/40 border border-primary/40 rounded-2xl flex items-center justify-between gap-3 animate-in fade-in duration-200">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <img src={searchedUser.avatarUrl} alt="" className="w-10 h-10 rounded-xl bg-gray-800 object-cover" />
+                  <Link 
+                    to={`/showcase/${searchedUser.id}`} 
+                    className="flex items-center gap-3 min-w-0 group/card cursor-pointer"
+                    title={t('friends.viewShowcase')}
+                  >
+                    <img src={searchedUser.avatarUrl} alt="" className="w-10 h-10 rounded-xl bg-gray-800 object-cover group-hover/card:ring-2 ring-primary transition-all" />
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-white truncate">{searchedUser.nickname || searchedUser.alias}</p>
+                      <p className="text-sm font-black text-white truncate group-hover/card:text-primary transition-colors">{searchedUser.nickname || searchedUser.alias}</p>
                       <p className="text-[10px] font-mono text-primary font-bold">#{searchedUser.playerCode}</p>
                     </div>
-                  </div>
+                  </Link>
                   {searchedUser.id === currentUser.id ? (
                     <span className="text-[10px] text-gray-500 font-bold uppercase">Eres tú</span>
                   ) : acceptedFriends.some(f => f.friendId === searchedUser.id) ? (
@@ -445,13 +449,17 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) => {
                 <div className="space-y-2">
                   {pendingReceived.map(f => (
                     <div key={f.friendId} className="p-3 bg-black/40 border border-gray-800 rounded-2xl flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <img src={f.avatarUrl} alt="" className="w-9 h-9 rounded-xl bg-gray-800 object-cover" />
+                      <Link 
+                        to={`/showcase/${f.friendId}`} 
+                        className="flex items-center gap-3 min-w-0 group/card cursor-pointer"
+                        title={t('friends.viewShowcase')}
+                      >
+                        <img src={f.avatarUrl} alt="" className="w-9 h-9 rounded-xl bg-gray-800 object-cover group-hover/card:ring-2 ring-primary transition-all" />
                         <div className="min-w-0">
-                          <p className="text-xs font-black text-white truncate">{f.alias}</p>
+                          <p className="text-xs font-black text-white truncate group-hover/card:text-primary transition-colors">{f.alias}</p>
                           <p className="text-[9px] font-mono text-gray-400">#{f.playerCode}</p>
                         </div>
-                      </div>
+                      </Link>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
                           onClick={() => handleAcceptFriend(f.friendId)}
@@ -484,13 +492,17 @@ const Profile: React.FC<ProfileProps> = ({ currentUser, onUpdateUser }) => {
                 <div className="space-y-2.5">
                   {acceptedFriends.map(f => (
                     <div key={f.friendId} className="p-3 bg-black/30 border border-gray-800/80 rounded-2xl flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <img src={f.avatarUrl} alt="" className="w-10 h-10 rounded-xl bg-gray-800 object-cover" />
+                      <Link 
+                        to={`/showcase/${f.friendId}`} 
+                        className="flex items-center gap-3 min-w-0 group/card cursor-pointer"
+                        title={t('friends.viewShowcase')}
+                      >
+                        <img src={f.avatarUrl} alt="" className="w-10 h-10 rounded-xl bg-gray-800 object-cover group-hover/card:ring-2 ring-primary transition-all" />
                         <div className="min-w-0">
-                          <p className="text-xs font-black text-white truncate">{f.alias}</p>
+                          <p className="text-xs font-black text-white truncate group-hover/card:text-primary transition-colors">{f.alias}</p>
                           <p className="text-[10px] font-mono text-primary font-bold">#{f.playerCode}</p>
                         </div>
-                      </div>
+                      </Link>
 
                       <div className="flex items-center gap-2 shrink-0">
                         <Link

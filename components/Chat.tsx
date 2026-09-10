@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Message, User } from '../types';
 import { Send, Bot, Info, Lock } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../services/i18n';
 import { useAuthModal } from './LoginModal';
 
@@ -15,6 +16,7 @@ interface ChatProps {
 const Chat: React.FC<ChatProps> = ({ messages, currentUser, onSendMessage }) => {
   const [inputText, setInputText] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const { openLoginModal } = useAuthModal();
 
@@ -64,12 +66,25 @@ const Chat: React.FC<ChatProps> = ({ messages, currentUser, onSendMessage }) => 
             </div>
           );
 
+          const isRegistered = !isMe && !msg.userId.startsWith('guest_') && msg.userId !== 'system';
+
           return (
             <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
               <div className="flex items-center gap-2 mb-1 px-1">
-                 <span className={`text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-primary' : 'text-gray-500'}`}>
-                   {isMe ? t('chat.you') : msg.userName}
-                 </span>
+                {isRegistered ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/showcase/${msg.userId}`)}
+                    className="text-[9px] font-black uppercase tracking-widest text-gray-500 hover:text-primary transition-colors cursor-pointer"
+                    title={t('friends.viewShowcase')}
+                  >
+                    {msg.userName}
+                  </button>
+                ) : (
+                  <span className={`text-[9px] font-black uppercase tracking-widest ${isMe ? 'text-primary' : 'text-gray-500'}`}>
+                    {isMe ? t('chat.you') : msg.userName}
+                  </span>
+                )}
               </div>
               <div className={`max-w-[85%] rounded-[1.3rem] px-4 py-3 text-xs leading-relaxed shadow-lg transition-all hover:scale-[1.02] ${
                 isMe 
